@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 import java.io.Serializable;
 
@@ -13,13 +14,12 @@ import java.io.Serializable;
 @Builder
 @Data
 public class RsEvent implements Serializable {
+
   @NotNull private String eventName;
   @NotNull private String keyword;
   private int voteNum;
   @NotNull private int userId;
+
   private  int rankNum;
-
-
-
 
 }

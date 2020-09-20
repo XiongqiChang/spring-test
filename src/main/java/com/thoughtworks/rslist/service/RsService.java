@@ -10,10 +10,12 @@ import com.thoughtworks.rslist.repository.RsEventRepository;
 import com.thoughtworks.rslist.repository.TradeRepository;
 import com.thoughtworks.rslist.repository.UserRepository;
 import com.thoughtworks.rslist.repository.VoteRepository;
+import org.aspectj.weaver.ast.Var;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class RsService {
@@ -22,7 +24,7 @@ public class RsService {
   final VoteRepository voteRepository;
   final TradeRepository tradeRepository;
 
-  public RsService(RsEventRepository rsEventRepository, UserRepository userRepository, VoteRepository voteRepository,TradeRepository tradeRepository) {
+  public RsService(RsEventRepository rsEventRepository, UserRepository userRepository, VoteRepository voteRepository, TradeRepository tradeRepository) {
     this.rsEventRepository = rsEventRepository;
     this.userRepository = userRepository;
     this.voteRepository = voteRepository;
@@ -33,17 +35,17 @@ public class RsService {
     Optional<RsEventDto> rsEventDto = rsEventRepository.findById(rsEventId);
     Optional<UserDto> userDto = userRepository.findById(vote.getUserId());
     if (!rsEventDto.isPresent()
-        || !userDto.isPresent()
-        || vote.getVoteNum() > userDto.get().getVoteNum()) {
+            || !userDto.isPresent()
+            || vote.getVoteNum() > userDto.get().getVoteNum()) {
       throw new RuntimeException();
     }
     VoteDto voteDto =
-        VoteDto.builder()
-            .localDateTime(vote.getTime())
-            .num(vote.getVoteNum())
-            .rsEvent(rsEventDto.get())
-            .user(userDto.get())
-            .build();
+            VoteDto.builder()
+                    .localDateTime(vote.getTime())
+                    .num(vote.getVoteNum())
+                    .rsEvent(rsEventDto.get())
+                    .user(userDto.get())
+                    .build();
     voteRepository.save(voteDto);
     UserDto user = userDto.get();
     user.setVoteNum(user.getVoteNum() - vote.getVoteNum());
@@ -54,15 +56,68 @@ public class RsService {
   }
 
   public boolean buy(Trade trade, int id) {
-    Optional<RsEventDto> byId = rsEventRepository.findById(id);
-    if (byId.isPresent()){
-      TradeDto tradeDto = TradeDto.builder().amount(trade.getAmount()).rank(trade.getRank())
-              .rsEvent(byId.get()).build();
-      tradeRepository.save(tradeDto);
-      return true;
-    }else {
-      return  false;
+    Optional<RsEventDto> rsEventDto = rsEventRepository.findById(id);
+    if (rsEventDto.isPresent()) {
+      RsEventDto rsEventDto1 = rsEventDto.get();
+      TradeDto byRank = tradeRepository.findByRank(trade.getRank());
+      if (byRank == null) {
+        List<TradeDto> byRsEventId = tradeRepository.findByRsEventId(id);
+        if (byRsEventId.size() != 0){
+          Integer id1 = byRsEventId.get(0).getId();
+          tradeRepository.deleteById(id1);
+        }
+        TradeDto tradeDto = TradeDto.builder().amount(trade.getAmount()).rank(trade.getRank())
+                .rsEvent(rsEventDto1).build();
+        rsEventDto1.setRankNum(trade.getRank());
+        tradeRepository.save(tradeDto);
+        rsEventRepository.save(rsEventDto1);
+        updateRsEventRankNum();
+        return true;
+      } else {
+        if (byRank.getAmount() >= trade.getAmount()) {
+          return false;
+        } else {
+          TradeDto tradeDto = TradeDto.builder().amount(trade.getAmount()).rank(trade.getRank())
+                  .rsEvent(rsEventDto1).build();
+          tradeRepository.save(tradeDto);
+          rsEventDto1.setRankNum(trade.getRank());
+          tradeRepository.save(tradeDto);
+          rsEventRepository.deleteById(byRank.getRsEvent().getId());
+          updateRsEventRankNum();
+          return true;
+        }
+      }
+    } else {
+      return false;
     }
+  }
 
+  public void updateRsEventRankNum() {
+    List<RsEventDto> all = rsEventRepository.findAll();
+    List<Integer> rankList = new ArrayList<>();
+    List<TradeDto> tradeDtoList = tradeRepository.findAll();
+    for (TradeDto tradeDto : tradeDtoList) {
+      int id = tradeDto.getRsEvent().getId();
+      RsEventDto rsEventDto = rsEventRepository.findById(id).get();
+      rsEventDto.setRankNum((tradeDto.getRank()));
+      rsEventRepository.save(rsEventDto);
+      rankList.add(tradeDto.getRank());
+    }
+    List<RsEventDto> collect = all.stream()
+            .sorted(Comparator.comparingInt(RsEventDto::getVoteNum).reversed())
+            .collect(Collectors.toList());
+    for (int i = 0; i < collect.size(); i++) {
+      RsEventDto rsEventDto = collect.get(i);
+      int rsEventDtoId = rsEventDto.getId();
+      if (tradeRepository.findByRsEventId(rsEventDtoId).size() == 0) {
+        int indexOf = collect.indexOf(rsEventDto);
+        while (rankList.contains(indexOf + 1)) {
+          indexOf = indexOf + 1;
+        }
+        rsEventDto.setRankNum(indexOf + 1);
+        rankList.add(indexOf+ 1);
+        rsEventRepository.save(rsEventDto);
+      }
+    }
   }
 }

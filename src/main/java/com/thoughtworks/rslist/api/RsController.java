@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.validation.Valid;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -43,18 +44,22 @@ public class RsController {
                     RsEvent.builder()
                         .eventName(item.getEventName())
                         .keyword(item.getKeyword())
-                        .userId(item.getId())
+                        .userId(item.getUser().getId())
                         .voteNum(item.getVoteNum())
-                        .build())
+                        .rankNum(item.getRankNum())
+                        .build()).sorted(Comparator.comparingInt(RsEvent::getRankNum).thenComparing(Comparator.comparingInt(RsEvent::getVoteNum).reversed()))
             .collect(Collectors.toList());
     if (start == null || end == null) {
+      rsService.updateRsEventRankNum();
       return ResponseEntity.ok(rsEvents);
     }
+    rsService.updateRsEventRankNum();
     return ResponseEntity.ok(rsEvents.subList(start - 1, end));
   }
 
   @GetMapping("/rs/{index}")
   public ResponseEntity<RsEvent> getRsEvent(@PathVariable int index) {
+    rsService.updateRsEventRankNum();
     List<RsEvent> rsEvents =
         rsEventRepository.findAll().stream()
             .map(
@@ -84,8 +89,10 @@ public class RsController {
             .eventName(rsEvent.getEventName())
             .voteNum(0)
             .user(userDto.get())
+            .rankNum(0)
             .build();
     rsEventRepository.save(build);
+    rsService.updateRsEventRankNum();
     return ResponseEntity.created(null).build();
   }
 

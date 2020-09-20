@@ -104,7 +104,5 @@ class VoteControllerTest {
               .andExpect(jsonPath("$[0].voteNum",is(6)))
               .andExpect(jsonPath("$[1].voteNum",is(7)))
               .andExpect(jsonPath("$[2].voteNum",is(8)));
-
-
     }
 }
