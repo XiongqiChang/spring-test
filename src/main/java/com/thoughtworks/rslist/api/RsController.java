@@ -97,7 +97,12 @@ public class RsController {
 
   @PostMapping("/rs/buy/{id}")
   public ResponseEntity buy(@PathVariable int id, @RequestBody Trade trade){
-    rsService.buy(trade, id);
+    if (id <= 0){
+      throw  new RequestNotValidException("invalid param");
+    }
+    if (!rsService.buy(trade, id)){
+      return ResponseEntity.badRequest().build();
+    }
     return ResponseEntity.ok().build();
   }
 

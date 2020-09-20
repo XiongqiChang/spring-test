@@ -1,9 +1,13 @@
 package com.thoughtworks.rslist.api;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.thoughtworks.rslist.domain.Trade;
 import com.thoughtworks.rslist.dto.RsEventDto;
+import com.thoughtworks.rslist.dto.TradeDto;
 import com.thoughtworks.rslist.dto.UserDto;
 import com.thoughtworks.rslist.dto.VoteDto;
 import com.thoughtworks.rslist.repository.RsEventRepository;
+import com.thoughtworks.rslist.repository.TradeRepository;
 import com.thoughtworks.rslist.repository.UserRepository;
 import com.thoughtworks.rslist.repository.VoteRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,8 +27,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -35,7 +38,10 @@ class RsControllerTest {
   @Autowired UserRepository userRepository;
   @Autowired RsEventRepository rsEventRepository;
   @Autowired VoteRepository voteRepository;
+  @Autowired
+  TradeRepository tradeRepository;
   private UserDto userDto;
+
 
   @BeforeEach
   void setUp() {
@@ -184,5 +190,39 @@ class RsControllerTest {
     List<VoteDto> voteDtos =  voteRepository.findAll();
     assertEquals(voteDtos.size(), 1);
     assertEquals(voteDtos.get(0).getNum(), 1);
+  }
+
+  @Test
+  void shouldBuyRsEventSuccess() throws Exception {
+    UserDto save = userRepository.save(userDto);
+    RsEventDto rsEventDto =
+            RsEventDto.builder().keyword("健康").eventName("第一条事件").user(save).voteNum(12).build();
+    rsEventRepository.save(rsEventDto);
+    RsEventDto rsEventDto1 =
+            RsEventDto.builder().keyword("经济").eventName("猪肉涨价").user(save).voteNum(12).build();
+    rsEventRepository.save(rsEventDto1);
+    ObjectMapper objectMapper = new ObjectMapper();
+    Trade build = Trade.builder().amount(100).rank(1).build();
+    String string = objectMapper.writeValueAsString(build);
+    mockMvc.perform(post("/rs/buy/"+rsEventDto.getId()).content(string).contentType(MediaType.APPLICATION_JSON)).andExpect(status().isOk());
+    TradeDto byRsEventId = tradeRepository.findByRsEventId(rsEventDto.getId());
+    Integer amount = byRsEventId.getAmount();
+    assertEquals(build.getAmount(),amount);
+
+  }
+  @Test
+  void shouldThrowException() throws Exception {
+    UserDto save = userRepository.save(userDto);
+    RsEventDto rsEventDto =
+            RsEventDto.builder().keyword("健康").eventName("第一条事件").user(save).voteNum(12).build();
+    rsEventRepository.save(rsEventDto);
+    RsEventDto rsEventDto1 =
+            RsEventDto.builder().keyword("经济").eventName("猪肉涨价").user(save).voteNum(12).build();
+    rsEventRepository.save(rsEventDto1);
+    ObjectMapper objectMapper = new ObjectMapper();
+    Trade build = Trade.builder().amount(100).rank(1).build();
+    String string = objectMapper.writeValueAsString(build);
+    mockMvc.perform(post("/rs/buy/-1").content(string).contentType(MediaType.APPLICATION_JSON))
+            .andExpect(jsonPath("$.error",is("invalid param")));
   }
 }
